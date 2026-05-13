@@ -1,17 +1,31 @@
 import os
+from typing import Optional
 
 import anthropic
 import streamlit as st
 from prompts import QUESTION_SYSTEM_PROMPT, FEEDBACK_SYSTEM_PROMPT
 
-# Local: use ANTHROPIC_API_KEY in the environment. Streamlit Cloud: same key in app secrets.
-if not os.environ.get("ANTHROPIC_API_KEY"):
+# Resolve API key: non-empty env wins; otherwise Streamlit secrets. (Cloud may set env to ""
+# so we must not skip secrets when the env value is blank.)
+def _api_key() -> Optional[str]:
+    env = (os.environ.get("ANTHROPIC_API_KEY") or "").strip()
+    if env:
+        return env
     try:
-        os.environ["ANTHROPIC_API_KEY"] = st.secrets["ANTHROPIC_API_KEY"]
+        return str(st.secrets["ANTHROPIC_API_KEY"]).strip()
     except KeyError:
-        pass
+        return None
 
-client = anthropic.Anthropic()
+
+_api = _api_key()
+if not _api:
+    st.error(
+        "Missing **ANTHROPIC_API_KEY**. Set it in `.streamlit/secrets.toml` locally, or under "
+        "**App settings → Secrets** on Streamlit Cloud (same key name, value in quotes)."
+    )
+    st.stop()
+
+client = anthropic.Anthropic(api_key=_api)
 
 CATEGORIES = [
     "Product Design",
