@@ -5,8 +5,7 @@ import anthropic
 import streamlit as st
 from prompts import QUESTION_SYSTEM_PROMPT, FEEDBACK_SYSTEM_PROMPT
 
-# Resolve API key: non-empty env wins; otherwise Streamlit secrets. (Cloud may set env to ""
-# so we must not skip secrets when the env value is blank.)
+
 def _api_key() -> Optional[str]:
     env = (os.environ.get("ANTHROPIC_API_KEY") or "").strip()
     if env:
@@ -29,7 +28,7 @@ client = anthropic.Anthropic(api_key=_api)
 
 CATEGORIES = [
     "Product Design",
-    "Metrics & Execution", 
+    "Metrics & Execution",
     "Strategy",
     "Estimation",
     "Pricing",
@@ -57,14 +56,15 @@ if st.button("Generate Question"):
         )
         st.session_state.question = response.content[0].text
         st.session_state.category = category
+        st.session_state.pop("feedback", None)
 
 if "question" in st.session_state:
     st.subheader("Your Question")
     st.info(st.session_state.question)
-    
-    answer = st.text_area("Your answer", height=200, 
+
+    answer = st.text_area("Your answer", height=200,
                           placeholder="Type or dictate your answer here...")
-    
+
     if st.button("Get Feedback") and answer:
         with st.spinner("Evaluating your answer..."):
             feedback = client.messages.create(
@@ -72,9 +72,12 @@ if "question" in st.session_state:
                 max_tokens=1000,
                 system=FEEDBACK_SYSTEM_PROMPT,
                 messages=[{
-                    "role": "user", 
+                    "role": "user",
                     "content": f"Question: {st.session_state.question}\n\nAnswer: {answer}"
                 }]
             )
-            st.subheader("Feedback")
-            st.markdown(feedback.content[0].text)
+            st.session_state.feedback = feedback.content[0].text
+
+if "feedback" in st.session_state:
+    st.subheader("Feedback")
+    st.markdown(st.session_state.feedback)
