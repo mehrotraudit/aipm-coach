@@ -4,6 +4,7 @@ from typing import Optional
 
 import anthropic
 import streamlit as st
+from postgrest.exceptions import APIError
 from supabase import create_client
 from prompts import QUESTION_SYSTEM_PROMPT, FEEDBACK_SYSTEM_PROMPT
 
@@ -64,14 +65,32 @@ def extract_score(feedback_text: str) -> Optional[int]:
     match = re.search(r'\*\*Score:\*\*\s*(\d+)/10', feedback_text)
     return int(match.group(1)) if match else None
 
-def save_session(category: str, score: int):
-    supabase.table("sessions").insert({
-        "category": category,
-        "score": score
-    }).execute()
+def save_session(category: str, score: int) -> bool:
+    try:
+        supabase.table("sessions").insert({
+            "category": category,
+            "score": score,
+        }).execute()
+        return True
+    except APIError:
+        st.warning(
+            "Could not save progress to Supabase. Typical fixes: create a `sessions` table with "
+            "`category` (text) and `score` (int), and add RLS policies so your **anon** key can "
+            "INSERT and SELECT—or set `SUPABASE_KEY` to the **service_role** key (private apps only). "
+            "See `supabase_sessions.sql` in the repo."
+        )
+        return False
+
 
 def load_progress():
-    return supabase.table("sessions").select("*").execute().data
+    try:
+        data = supabase.table("sessions").select("*").execute().data
+        return data or []
+    except APIError:
+        st.warning(
+            "Could not load progress from Supabase. Check RLS allows SELECT on `sessions` for your key."
+        )
+        return []
 
 
 # --- UI ---
